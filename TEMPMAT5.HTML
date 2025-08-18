@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=576, height=960, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Clima – Palmares (576×960)</title>
+
+<link rel="preconnect" href="https://images.unsplash.com">
+<link rel="preconnect" href="https://api.open-meteo.com">
+
+<style>
+  :root{
+    --w:576px; --h:960px;
+    --blur: 10px;
+    --panel-bg: rgba(11, 33, 60, .65);
+    --panel-strong: rgba(9, 25, 46, .75);
+    --text:#ffffff;
+    --muted:#cbd5e1;
+    --accent:#0ea5e9;
+    --radius:28px;
+    --shadow:0 18px 60px rgba(0,0,0,.55);
+  }
+  html,body{height:100%; margin:0; padding:0;}
+  body{
+    background:#06121f;
+    font-family:system-ui, Segoe UI, Roboto, Ubuntu;
+    color:var(--text);
+    overflow:hidden;
+  }
+  /* Fundo com imagem + overlay */
+  .bg{
+    position:fixed; inset:0; z-index:-2;
+    background:center/cover no-repeat;
+    filter: blur(var(--blur)) saturate(1.05);
+    transform: scale(1.04);
+  }
+  .overlay{
+    position:fixed; inset:0; z-index:-1;
+    background: radial-gradient(160% 90% at 50% 15%, rgba(0,0,0,.15), rgba(0,0,0,.6) 60%, rgba(0,0,0,.75));
+  }
+
+  /* Container fixo no canto superior esquerdo */
+  .wrap{
+    position:absolute; top:0; left:0;
+    width:var(--w); height:var(--h);
+    padding:20px; box-sizing:border-box;
+  }
+
+  /* CARTÃO SUPERIOR */
+  .now{
+    position:relative; height:55%;
+    border-radius:var(--radius);
+    background: var(--panel-bg);
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow);
+    padding:28px;
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .city{ font-size:28px; font-weight:800; letter-spacing:.5px; opacity:.95; display:flex; align-items:center; gap:8px }
+  .temp{ font-size:138px; font-weight:900; margin-top:6px; letter-spacing:-3px; text-shadow:0 10px 30px rgba(0,0,0,.35) }
+  .cond{ font-size:34px; margin-top:-12px; font-weight:700; color:var(--muted) }
+  .hi-lo{ font-size:26px; font-weight:700; color:#b8cae2; margin-top:6px }
+  .icon-big{ position:absolute; right:40px; top:36px; width:160px; height:160px }
+
+  /* LISTA DE DIAS */
+  .days{
+    margin-top:26px; list-style:none; padding:0;
+    background: var(--panel-strong); backdrop-filter: blur(8px);
+    border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow);
+  }
+  .row{
+    display:grid; grid-template-columns:1fr auto auto; align-items:center;
+    padding:22px 26px; border-bottom:1px solid rgba(255,255,255,.10);
+    font-size:24px;
+  }
+  .row:last-child{ border-bottom:0 }
+  .d-left{ display:flex; flex-direction:column }
+  .dt{ font-size:18px; color:#a9bdd7 }
+  .dn{ font-size:26px; font-weight:800 }
+  .mini{ display:flex; align-items:center; gap:12px }
+  .icon-mini{ width:36px; height:36px }
+  .tmax{ font-weight:800 }
+  .tmin{ color:#a9bdd7 }
+
+  /* ====== Animações para ícones ====== */
+  @keyframes floatY { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-6px) } }
+  @keyframes sunPulse { 0%,100%{ transform: scale(1) } 50%{ transform: scale(1.06) } }
+  @keyframes spinSlow { from{ transform: rotate(0deg) } to{ transform: rotate(360deg) } }
+  @keyframes rainFall { 0%{ transform: translateY(0); opacity:1 } 80%{ opacity:1 } 100%{ transform: translateY(16px); opacity:0 } }
+  @keyframes flicker { 0%, 100%{ opacity:1 } 40%{ opacity:.55 } 70%{ opacity:.85 } }
+
+  .anim-cloud { animation: floatY 5s ease-in-out infinite }
+  .anim-sun   { animation: sunPulse 4s ease-in-out infinite }
+  .anim-rays  { animation: spinSlow 18s linear infinite; transform-origin: center }
+  .anim-drop  { animation: rainFall 900ms linear infinite }
+  .anim-bolt  { animation: flicker 1.1s ease-in-out infinite }
+
+  .footer{ text-align:center; font-size:12px; color:#9bb0c7; margin-top:10px; opacity:.8 }
+</style>
+</head>
+<body>
+  <!-- fundo dinâmico -->
+  <div class="bg" id="bg"></div>
+  <div class="overlay"></div>
+
+  <div class="wrap">
+    <section class="now">
+      <div class="city">📍 PALMARES</div>
+      <div>
+        <div class="temp" id="nowTemp">--°C</div>
+        <div class="cond" id="nowCond">Carregando…</div>
+        <div class="hi-lo"><span id="nowHigh">Máx —°C</span> • <span id="nowLow">Mín —°C</span></div>
+      </div>
+      <div id="nowIcon" class="icon-big" aria-hidden="true"></div>
+    </section>
+
+    <ul class="days" id="daysList"></ul>
+    <div class="footer">Atualiza a cada 10 min • Fonte: Open-Meteo</div>
+  </div>
+
+<script>
+(() => {
+  /* ===== Configurações ===== */
+  const CITY_NAME = "PALMARES";
+  const LAT = -8.684, LON = -35.591, TZ = "America/Recife";
+
+  /* Troque a imagem se quiser outra (Unsplash) */
+  const BG_URL = "https://images.unsplash.com/photo-1502303756788-0e1b6a80b4ae?q=80&auto=format&fit=crop&w=1200&h=2000";
+  document.getElementById("bg").style.backgroundImage = `url('${BG_URL}')`;
+
+  const $ = s => document.querySelector(s);
+
+  /* WMO → texto + tipo de ícone */
+  const WMO = {
+    0:["Céu limpo","sunny"],
+    1:["Sol com nuvens","sunCloud"],
+    2:["Parcialmente nublado","cloudSun"],
+    3:["Nublado","cloud"],
+    45:["Nevoeiro","fog"], 48:["Nevoeiro","fog"],
+    51:["Chuvisco fraco","drizzle"], 53:["Chuvisco","drizzle"], 55:["Chuvisco forte","drizzle"],
+    61:["Chuva fraca","rain"], 63:["Chuva","rain"], 65:["Chuva forte","rain"],
+    80:["Aguaceiros fracos","rain"], 81:["Aguaceiros","rain"], 82:["Aguaceiros fortes","rain"],
+    95:["Trovoadas","storm"], 96:["Trovoadas fortes","storm"], 99:["Trovoadas com granizo","storm"],
+  };
+
+  /* Ícones SVG animados */
+  function icon(kind, cls) {
+    const rays = `
+      <g class="anim-rays" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none">
+        <path d="M34 2v10M34 54v10M14 34H4M64 34H54M49 8l-7 7M26 53l-7 7M8 19l7 7M49 60l-7-7"/>
+      </g>`;
+    const sunCore = `<circle cx="34" cy="34" r="12" class="anim-sun"/>`;
+    const cloud = `<ellipse cx="40" cy="42" rx="22" ry="14" class="anim-cloud"/>`;
+    const fogLines = `<g stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none">
+      <path d="M12 54h44M16 60h36"/></g>`;
+    const drops = `
+      <g stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none">
+        <path d="M26 52l-6 10" class="anim-drop" style="animation-delay:0ms"/>
+        <path d="M38 52l-6 10" class="anim-drop" style="animation-delay:200ms"/>
+        <path d="M50 52l-6 10" class="anim-drop" style="animation-delay:400ms"/>
+      </g>`;
+    const drizzle = `
+      <g stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none">
+        <path d="M24 56v8" class="anim-drop" style="animation-duration:1100ms"/>
+        <path d="M36 56v8" class="anim-drop" style="animation-duration:1100ms;animation-delay:200ms"/>
+        <path d="M48 56v8" class="anim-drop" style="animation-duration:1100ms;animation-delay:400ms"/>
+      </g>`;
+    const bolt = `<polygon points="34,50 24,70 40,60 30,60 40,44" class="anim-bolt"/>`;
+
+    const base = `<svg class="${cls}" viewBox="0 0 68 80" fill="white" stroke="white">`;
+    const end  = `</svg>`;
+
+    switch (kind) {
+      case "sunny":      return base + rays + sunCore + end;
+      case "cloud":      return base + cloud + end;
+      case "cloudSun":   return base + sunCore + rays + cloud + end;
+      case "sunCloud":   return base + sunCore + rays + cloud + end;
+      case "fog":        return base + cloud + fogLines + end;
+      case "rain":       return base + cloud + drops + end;
+      case "drizzle":    return base + cloud + drizzle + end;
+      case "storm":      return base + cloud + drops + bolt + end;
+      default:           return base + cloud + end;
+    }
+  }
+
+  function fmtDay(dateStr, idx){
+    const d = new Date(dateStr + "T12:00:00");
+    const when  = new Intl.DateTimeFormat("pt-BR",{ day:"numeric", month:"long", timeZone:TZ }).format(d);
+    const label = idx===0 ? "Hoje" : idx===1 ? "Amanhã"
+                  : new Intl.DateTimeFormat("pt-BR",{ weekday:"long", timeZone:TZ }).format(d);
+    return { when, label };
+  }
+
+  async function load(){
+    try{
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&timezone=${encodeURIComponent(TZ)}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4`;
+      const res = await fetch(url, { cache:"no-store" });
+      const data = await res.json();
+
+      const curT   = Math.round(data.current.temperature_2m);
+      const curW   = data.current.weather_code;
+      const [txt, kind] = WMO[curW] || ["Condição desconhecida","cloud"];
+
+      // Topo
+      document.querySelector(".city").textContent = "📍 " + CITY_NAME;
+      document.getElementById("nowTemp").textContent = curT + "°C";
+      document.getElementById("nowCond").textContent = txt;
+      document.getElementById("nowIcon").innerHTML   = icon(kind, "icon-big");
+      document.getElementById("nowHigh").textContent = "Máx " + Math.round(data.daily.temperature_2m_max[0]) + "°C";
+      document.getElementById("nowLow").textContent  = "Mín " + Math.round(data.daily.temperature_2m_min[0]) + "°C";
+
+      // Lista 3 dias
+      const days = data.daily.time.slice(0,3).map((t,i)=>({
+        ...fmtDay(t,i),
+        code: data.daily.weather_code[i],
+        tmax: Math.round(data.daily.temperature_2m_max[i]),
+        tmin: Math.round(data.daily.temperature_2m_min[i]),
+      }));
+
+      const list = document.getElementById("daysList"); list.innerHTML = "";
+      days.forEach(d=>{
+        const [desc, k] = WMO[d.code] || ["—","cloud"];
+        list.innerHTML += `
+          <li class="row">
+            <div class="d-left">
+              <span class="dt">${d.when}</span>
+              <span class="dn">${d.label}</span>
+            </div>
+            <div class="mini">${icon(k,"icon-mini")}<span>${desc}</span></div>
+            <div style="text-align:right">
+              <div class="tmax">${d.tmax}°C</div>
+              <div class="tmin">${d.tmin}°C</div>
+            </div>
+          </li>`;
+      });
+    }catch(e){
+      console.error(e);
+      document.getElementById("nowCond").textContent = "Falha ao carregar";
+    }
+  }
+
+  load();
+  setInterval(load, 10*60*1000);
+})();
+</script>
+</body>
+</html>
