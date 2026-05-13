@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=500, height=500, initial-scale=1" />
+<title>Temp Palmares 500x500</title>
+
+<style>
+  body {
+    background: #000; 
+    color: #FFF;
+    font-family: 'Arial Black', sans-serif; /* Fonte mais grossa para melhor leitura */
+    margin: 0;
+    padding: 0;
+    width: 500px;
+    height: 500px;
+    overflow: hidden;
+  }
+
+  .temp-container {
+    position: absolute;
+    top: -10px; /* Ajuste para encostar bem no topo */
+    left: 0;
+    display: flex;
+    align-items: flex-start;
+    padding: 0;
+  }
+
+  .temp-valor {
+    font-size: 250px; /* Tamanho ajustado para a largura de 500px */
+    font-weight: 900;
+    line-height: 0.85; 
+    letter-spacing: -5px;
+  }
+
+  .unidade {
+    font-size: 100px;
+    font-weight: 900;
+    margin-top: 15px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="temp-container">
+    <div class="temp-valor" id="nowTemp">--</div>
+    <div class="unidade">°</div>
+  </div>
+
+<script>
+(() => {
+  // Latitude e Longitude de Palmares-PE
+  const LAT = -8.684, LON = -35.591;
+
+  async function loadTemp(){
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m&timezone=auto`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data && data.current) {
+        const temp = Math.round(data.current.temperature_2m);
+        document.getElementById("nowTemp").textContent = temp;
+      }
+    } catch(e) {
+      console.error("Erro:", e);
+    }
+  }
+
+  loadTemp();
+  // Atualiza a cada 10 minutos
+  setInterval(loadTemp, 600000);
+})();
+</script>
+</body>
+</html>
