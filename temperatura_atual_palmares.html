@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Temperatura Palmares</title>
+
+<style>
+  body {
+    background: #000000; /* Fundo preto para painéis de LED */
+    color: #ffffff;      /* Texto branco para alto contraste */
+    font-family: system-ui, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Ajuste o tamanho da fonte conforme a resolução do seu painel */
+  .temp {
+    font-size: 250px; 
+    font-weight: 900;
+    letter-spacing: -5px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="temp" id="nowTemp">--°C</div>
+
+<script>
+(() => {
+  const LAT = -8.684, LON = -35.591, TZ = "America/Recife";
+  const $ = s => document.querySelector(s);
+
+  async function load(){
+    try {
+      // Busca dados da API Open-Meteo
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&timezone=${encodeURIComponent(TZ)}&current=temperature_2m`;
+      const res = await fetch(url, { cache:"no-store" });
+      const data = await res.json();
+
+      const curT = Math.round(data.current.temperature_2m);
+      $("#nowTemp").textContent = curT + "°C";
+
+    } catch(e) {
+      console.error("Erro ao carregar temperatura:", e);
+      $("#nowTemp").textContent = "ERRO";
+    }
+  }
+
+  load();
+  // Atualiza automaticamente a cada 10 minutos
+  setInterval(load, 10 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
